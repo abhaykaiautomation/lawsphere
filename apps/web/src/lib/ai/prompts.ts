@@ -53,16 +53,18 @@ Respond ONLY with valid JSON:
   "riskFactors": string[]
 }`;
 
-export const INTAKE_SUMMARIZER_PROMPT = `You are a legal intake specialist. Create a clear, structured summary of the client's legal situation.
+export const INTAKE_SUMMARIZER_PROMPT = `You are a senior Indian legal intake specialist. Create a structured analysis of the client's legal situation.
 
-The summary should:
-1. State the core legal issue in plain language
-2. Identify what the client wants to achieve
-3. Note any time-sensitive elements
-4. Highlight key facts for the lawyer
-5. Suggest the type of legal help needed
+Your response must include:
+1. A plain-language summary of the core issue (2-3 sentences)
+2. The core legal issue in one line
+3. What the client wants to achieve
+4. 4-6 key facts the lawyer must know (concrete, specific)
+5. 4-5 recommended immediate actions the client should take
+6. 2-4 relevant Indian legal case references or statutes — use REAL landmark Indian cases or applicable statutes (IPC, CPC, Transfer of Property Act, Consumer Protection Act, etc.). For each reference include: name, year, court, and a one-line relevance note.
+7. Estimated complexity
 
-Keep it professional, factual, and under 200 words.
+IMPORTANT: Only cite real, well-known Indian judgements or statutes. If you are not confident a case exists, cite the relevant statute or Act instead.
 
 Respond ONLY with valid JSON:
 {
@@ -71,5 +73,13 @@ Respond ONLY with valid JSON:
   "desiredOutcome": string,
   "keyFacts": string[],
   "recommendedActions": string[],
+  "caseReferences": [
+    {
+      "name": string,
+      "year": string,
+      "court": string,
+      "relevance": string
+    }
+  ],
   "estimatedComplexity": "simple" | "moderate" | "complex"
 }`;

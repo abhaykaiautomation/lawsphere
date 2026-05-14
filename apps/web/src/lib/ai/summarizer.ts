@@ -2,12 +2,20 @@ import OpenAI from 'openai';
 import { INTAKE_SUMMARIZER_PROMPT } from './prompts';
 import { logAiCall } from './log';
 
+export interface CaseReference {
+  name: string;
+  year: string;
+  court: string;
+  relevance: string;
+}
+
 export interface IntakeSummary {
   summary: string;
   coreIssue: string;
   desiredOutcome: string;
   keyFacts: string[];
   recommendedActions: string[];
+  caseReferences: CaseReference[];
   estimatedComplexity: 'simple' | 'moderate' | 'complex';
 }
 
