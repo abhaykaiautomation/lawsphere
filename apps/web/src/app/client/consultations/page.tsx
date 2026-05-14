@@ -1,3 +1,6 @@
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { SignInPrompt } from '@/components/layouts/sign-in-prompt';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, Video, Phone, MessageSquare } from 'lucide-react';
@@ -17,7 +20,12 @@ const statusColor: Record<string, string> = {
   COMPLETED: 'bg-slate-100 text-slate-600',
 };
 
-export default function ConsultationsPage() {
+export default async function ConsultationsPage() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('lawsphere_token')?.value;
+  try { if (!token) throw new Error(); verifyToken(token); } catch {
+    return <SignInPrompt message="Sign in to view your consultations" />;
+  }
   return (
     <div className="space-y-8">
       <div>

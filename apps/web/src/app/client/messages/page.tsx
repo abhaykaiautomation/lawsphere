@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuthStore } from '@/stores/auth.store';
+import { SignInPrompt } from '@/components/layouts/sign-in-prompt';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -19,9 +21,11 @@ const messages = [
 ];
 
 export default function MessagesPage() {
+  const user = useAuthStore((s) => s.user);
   const [selected, setSelected] = useState('1');
   const [input, setInput] = useState('');
   const active = threads.find((t) => t.id === selected);
+  if (!user) return <SignInPrompt message="Sign in to view your messages" />;
 
   return (
     <div className="space-y-6">

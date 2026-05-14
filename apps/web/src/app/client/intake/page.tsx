@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuthStore } from '@/stores/auth.store';
+import { SignInPrompt } from '@/components/layouts/sign-in-prompt';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -31,6 +33,8 @@ interface ApiResponse<T> {
 }
 
 export default function IntakePage() {
+  const user = useAuthStore((s) => s.user);
+  if (!user) return <SignInPrompt message="Sign in to submit a legal issue" />;
   const router = useRouter();
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [submittedCase, setSubmittedCase] = useState<{ id: string; caseNumber: string } | null>(null);

@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useRouter } from 'next/navigation';
 import {
   Scale, LayoutDashboard, FileText, Calendar, Users,
-  MessageSquare, Bell, Settings, LogOut, PlusCircle, Shield,
+  MessageSquare, Bell, Settings, LogOut, PlusCircle, Shield, LogIn,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -90,19 +90,26 @@ export function DashboardSidebar() {
           Settings
         </Link>
 
-        {/* User */}
-        <div className="flex items-center gap-3 px-3 py-3 mt-2 rounded-lg bg-slate-800">
-          <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold shrink-0">
-            {initials}
+        {/* User / Sign-in */}
+        {user ? (
+          <div className="flex items-center gap-3 px-3 py-3 mt-2 rounded-lg bg-slate-800">
+            <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold shrink-0">
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-white truncate">{user.email}</p>
+              <p className="text-xs text-slate-400 capitalize">{user.role.toLowerCase()}</p>
+            </div>
+            <button onClick={handleLogout} className="text-slate-400 hover:text-white transition-colors" title="Sign out">
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white truncate">{user?.email ?? ''}</p>
-            <p className="text-xs text-slate-400 capitalize">{user?.role?.toLowerCase() ?? ''}</p>
-          </div>
-          <button onClick={handleLogout} className="text-slate-400 hover:text-white transition-colors" title="Sign out">
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        ) : (
+          <Link href="/login" className="flex items-center gap-3 px-3 py-3 mt-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-colors">
+            <LogIn className="h-4 w-4 text-white shrink-0" />
+            <span className="text-sm font-semibold text-white">Sign In</span>
+          </Link>
+        )}
       </div>
     </aside>
   );

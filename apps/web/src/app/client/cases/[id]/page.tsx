@@ -1,8 +1,16 @@
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { SignInPrompt } from '@/components/layouts/sign-in-prompt';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, FileText, Brain, Calendar, User, AlertCircle } from 'lucide-react';
 
-export default function CaseDetailPage({ params }: { params: { id: string } }) {
+export default async function CaseDetailPage({ params }: { params: { id: string } }) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('lawsphere_token')?.value;
+  try { if (!token) throw new Error(); verifyToken(token); } catch {
+    return <SignInPrompt message="Sign in to view case details" />;
+  }
   const mockCase = {
     id: params.id,
     title: 'Property Dispute with Neighbour',

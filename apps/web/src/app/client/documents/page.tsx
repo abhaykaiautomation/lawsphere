@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuthStore } from '@/stores/auth.store';
+import { SignInPrompt } from '@/components/layouts/sign-in-prompt';
 import { FileText, Upload, Download, Trash2, Search, File } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -16,7 +18,9 @@ const typeColor: Record<string, string> = {
 };
 
 export default function DocumentsPage() {
+  const user = useAuthStore((s) => s.user);
   const [dragging, setDragging] = useState(false);
+  if (!user) return <SignInPrompt message="Sign in to manage your documents" />;
 
   return (
     <div className="space-y-6">

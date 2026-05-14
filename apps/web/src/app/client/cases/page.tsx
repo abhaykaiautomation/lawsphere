@@ -1,3 +1,6 @@
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { SignInPrompt } from '@/components/layouts/sign-in-prompt';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, FileText, ArrowRight, Search } from 'lucide-react';
@@ -18,7 +21,12 @@ const statusColor: Record<string, string> = {
   PENDING: 'bg-slate-100 text-slate-600', RESOLVED: 'bg-green-100 text-green-700',
 };
 
-export default function CasesPage() {
+export default async function CasesPage() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('lawsphere_token')?.value;
+  try { if (!token) throw new Error(); verifyToken(token); } catch {
+    return <SignInPrompt message="Sign in to view your cases" />;
+  }
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
