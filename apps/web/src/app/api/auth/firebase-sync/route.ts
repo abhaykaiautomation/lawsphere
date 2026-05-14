@@ -60,8 +60,9 @@ export async function POST(req: NextRequest) {
         ? UserRole.ADMIN
         : (requestedRole ?? UserRole.CLIENT);
 
-      const [fn = '', ...rest] = (firebaseName || `${firstName ?? ''} ${lastName ?? ''}`).trim().split(' ');
-      const ln = rest.join(' ') || lastName ?? '';
+      const fullName = firebaseName || `${firstName || ''} ${lastName || ''}`;
+      const [fn = '', ...rest] = fullName.trim().split(' ');
+      const ln = rest.join(' ') || lastName || '';
 
       user = await prisma.user.create({
         data: {
