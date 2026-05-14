@@ -4,12 +4,13 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { ok, notFound, err, handleError } from '@/lib/errors';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { sub } = getCurrentUser(req);
 
     const appointment = await prisma.appointment.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { consultation: true },
     });
     if (!appointment) return notFound('Appointment not found');
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const consultation = await prisma.consultation.create({
       data: {
-        appointmentId: params.id,
+        appointmentId: id,
         caseId: appointment.caseId,
         lawyerProfileId: appointment.lawyerProfileId,
         roomId: `room-${uuidv4()}`,

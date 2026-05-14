@@ -3,12 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { ok, notFound, forbidden, handleError } from '@/lib/errors';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { sub, role } = getCurrentUser(req);
 
     const legalCase = await prisma.case.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { practiceArea: true, documents: true, recommendations: { include: { lawyerProfile: true } } },
     });
     if (!legalCase) return notFound('Case not found');

@@ -7,7 +7,9 @@ import { notFound } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, FileText, Brain, Calendar, MessageSquare, AlertCircle, Sparkles } from 'lucide-react';
 
-export default async function CaseDetailPage({ params }: { params: { id: string } }) {
+export default async function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
   const cookieStore = await cookies();
   const token = cookieStore.get('lawsphere_token')?.value;
   let userId: string;
@@ -22,7 +24,7 @@ export default async function CaseDetailPage({ params }: { params: { id: string 
   if (!clientProfile) return <SignInPrompt message="Sign in to view case details" />;
 
   const legalCase = await prisma.case.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       practiceArea: true,
       recommendations: {

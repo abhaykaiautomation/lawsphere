@@ -3,17 +3,18 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { ok, notFound, forbidden, handleError } from '@/lib/errors';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { role } = getCurrentUser(req);
     if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') return forbidden();
 
     const { status, reason } = await req.json() as { status: 'VERIFIED' | 'REJECTED'; reason?: string };
 
-    const lawyer = await prisma.lawyerProfile.findUnique({ where: { id: params.id }, include: { user: true } });
+    const lawyer = await prisma.lawyerProfile.findUnique({ where: { id }, include: { user: true } });
     if (!lawyer) return notFound('Lawyer not found');
 
-    await prisma.lawyerProfile.update({ where: { id: params.id }, data: { verificationStatus: status } });
+    await prisma.lawyerProfile.update({ where: { id }, data: { verificationStatus: status } });
     await prisma.user.update({ where: { id: lawyer.userId }, data: { status: status === 'VERIFIED' ? 'ACTIVE' : 'INACTIVE' } });
 
     await prisma.notification.create({

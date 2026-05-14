@@ -3,11 +3,12 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { ok, notFound, forbidden, handleError } from '@/lib/errors';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { sub, role } = getCurrentUser(req);
 
-    const legalCase = await prisma.case.findUnique({ where: { id: params.id } });
+    const legalCase = await prisma.case.findUnique({ where: { id } });
     if (!legalCase) return notFound('Case not found');
 
     if (role === 'CLIENT') {
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
 
     const recommendations = await prisma.aiRecommendation.findMany({
-      where: { caseId: params.id },
+      where: { caseId: id },
       orderBy: { rank: 'asc' },
       include: {
         lawyerProfile: {

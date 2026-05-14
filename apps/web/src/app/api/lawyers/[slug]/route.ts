@@ -2,10 +2,11 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ok, notFound, handleError } from '@/lib/errors';
 
-export async function GET(_req: NextRequest, { params }: { params: { slug: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
+    const { slug } = await params;
     const lawyer = await prisma.lawyerProfile.findUnique({
-      where: { slug: params.slug, deletedAt: null },
+      where: { slug, deletedAt: null },
       include: {
         user: { select: { email: true, avatarUrl: true } },
         practiceAreas: { include: { practiceArea: true } },

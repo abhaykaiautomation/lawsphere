@@ -3,12 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { ok, notFound, handleError } from '@/lib/errors';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     getCurrentUser(req);
 
     const consultation = await prisma.consultation.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { appointment: true },
     });
     if (!consultation) return notFound('Consultation not found');
@@ -18,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const actualDurationMin = Math.round((now.getTime() - startedAt.getTime()) / 60000);
 
     const updated = await prisma.consultation.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: 'COMPLETED', endedAt: now, actualDurationMin },
     });
     return ok(updated);

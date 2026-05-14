@@ -13,12 +13,13 @@ const s3 = new S3Client({
   },
 });
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { sub } = getCurrentUser(req);
 
     const document = await prisma.document.findUnique({
-      where: { id: params.id, deletedAt: null },
+      where: { id, deletedAt: null },
       include: { clientProfile: true },
     });
     if (!document) return notFound('Document not found');
@@ -35,19 +36,20 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { sub } = getCurrentUser(req);
 
     const document = await prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { clientProfile: true },
     });
     if (!document) return notFound('Document not found');
     if (document.clientProfile?.userId !== sub) return forbidden();
 
     await s3.send(new DeleteObjectCommand({ Bucket: document.s3Bucket, Key: document.s3Key }));
-    await prisma.document.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+    await prisma.document.update({ where: { id }, data: { deletedAt: new Date() } });
 
     return ok({ success: true });
   } catch (e) {

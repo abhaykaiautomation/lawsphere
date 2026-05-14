@@ -9,15 +9,16 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET!,
 });
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { sub } = getCurrentUser(req);
 
     const clientProfile = await prisma.clientProfile.findUnique({ where: { userId: sub } });
     if (!clientProfile) return notFound('Client profile not found');
 
     const appointment = await prisma.appointment.findFirst({
-      where: { id: params.id, clientProfileId: clientProfile.id },
+      where: { id, clientProfileId: clientProfile.id },
       include: { lawyerProfile: true, payment: true },
     });
     if (!appointment) return notFound('Appointment not found');
@@ -32,12 +33,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const order = await razorpay.orders.create({
       amount: amountInPaise,
       currency: appointment.lawyerProfile.currency,
-      receipt: params.id,
+      receipt: id,
     });
 
     const payment = await prisma.payment.create({
       data: {
-        appointmentId: params.id,
+        appointmentId: id,
         clientId: clientProfile.userId,
         lawyerProfileId: appointment.lawyerProfileId,
         amount,
