@@ -1,0 +1,788 @@
+// LawSphere — Production Prisma Schema
+// Supports: Multi-tenant, Soft Delete, Full Audit Trail, RBAC
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")       // Neon pooled URL (used at runtime)
+  directUrl = env("DATABASE_URL_UNPOOLED") // Neon direct URL (used by Prisma migrations)
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  CLIENT
+  LAWYER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum LawyerVerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum LawyerAvailabilityStatus {
+  AVAILABLE
+  BUSY
+  ON_LEAVE
+  OFFLINE
+}
+
+enum CaseStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  MATCHED
+  IN_CONSULTATION
+  RESOLVED
+  CLOSED
+  ARCHIVED
+}
+
+enum UrgencyLevel {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  RESCHEDULED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum ConsultationMode {
+  VIDEO
+  AUDIO
+  CHAT
+  IN_PERSON
+}
+
+enum ConsultationStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum DocumentType {
+  IDENTITY_PROOF
+  LEGAL_DOCUMENT
+  CONTRACT
+  COURT_FILING
+  EVIDENCE
+  INVOICE
+  REPORT
+  OTHER
+}
+
+enum DocumentStatus {
+  UPLOADING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
+}
+
+enum NotificationType {
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_REMINDER
+  CONSULTATION_STARTING
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  DOCUMENT_PROCESSED
+  MESSAGE_RECEIVED
+  LAWYER_VERIFIED
+  REVIEW_REQUESTED
+  SYSTEM_ALERT
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH
+  WHATSAPP
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  SYSTEM
+  AI_SUGGESTION
+}
+
+enum AiTaskType {
+  LEGAL_CLASSIFICATION
+  URGENCY_SCORING
+  INTAKE_SUMMARIZATION
+  LAWYER_RECOMMENDATION
+  DOCUMENT_ANALYSIS
+  RESPONSE_SUGGESTION
+  CONTRACT_REVIEW
+}
+
+// ============================================================
+// CORE USER DOMAIN
+// ============================================================
+
+model User {
+  id                String     @id @default(cuid())
+  firebaseUid       String?    @unique
+  email             String     @unique
+  emailVerified     Boolean    @default(false)
+  phone             String?
+  phoneVerified     Boolean    @default(false)
+  role              UserRole   @default(CLIENT)
+  status            UserStatus @default(PENDING_VERIFICATION)
+  preferredLanguage String     @default("en")
+  timezone          String     @default("UTC")
+  avatarUrl         String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
+
+  clientProfile  ClientProfile?
+  lawyerProfile  LawyerProfile?
+  adminProfile   AdminProfile?
+  notifications  Notification[]
+  sentMessages   Message[]         @relation("SentMessages")
+  sessions       UserSession[]
+  auditLogs      AuditLog[]
+
+  @@index([email])
+  @@index([firebaseUid])
+  @@index([role, status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("user_sessions")
+}
+
+model ClientProfile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  firstName        String
+  lastName         String
+  dateOfBirth      DateTime?
+  gender           String?
+  addressLine1     String?
+  addressLine2     String?
+  city             String?
+  state            String?
+  country          String    @default("IN")
+  postalCode       String?
+  occupation       String?
+  organizationName String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cases         Case[]
+  appointments  Appointment[]
+  reviews       Review[]
+  documents     Document[]
+
+  @@index([userId])
+  @@map("client_profiles")
+}
+
+model AdminProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  firstName   String
+  lastName    String
+  department  String?
+  permissions Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admin_profiles")
+}
+
+// ============================================================
+// LAWYER DOMAIN
+// ============================================================
+
+model LawyerProfile {
+  id                   String                   @id @default(cuid())
+  userId               String                   @unique
+  firstName            String
+  lastName             String
+  slug                 String                   @unique
+  bio                  String?                  @db.Text
+  headline             String?
+  barCouncilNumber     String?                  @unique
+  barCouncilState      String?
+  yearsOfExperience    Int                      @default(0)
+  verificationStatus   LawyerVerificationStatus @default(PENDING)
+  availabilityStatus   LawyerAvailabilityStatus @default(OFFLINE)
+  consultationFee      Decimal                  @db.Decimal(10, 2)
+  currency             String                   @default("INR")
+  freeConsultationMins Int                      @default(0)
+  averageRating        Decimal                  @default(0) @db.Decimal(3, 2)
+  totalReviews         Int                      @default(0)
+  totalConsultations   Int                      @default(0)
+  isProfileComplete    Boolean                  @default(false)
+  isFeatured           Boolean                  @default(false)
+  profileViews         Int                      @default(0)
+  addressLine1         String?
+  city                 String?
+  state                String?
+  country              String                   @default("IN")
+  languages            String[]                 @default(["en"])
+  websiteUrl           String?
+  linkedinUrl          String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  deletedAt            DateTime?
+
+  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  practiceAreas      LawyerPracticeArea[]
+  educations         LawyerEducation[]
+  experiences        LawyerExperience[]
+  documents          LawyerDocument[]
+  availability       LawyerAvailability[]
+  appointments       Appointment[]
+  consultations      Consultation[]
+  cases              CaseLawyerMatch[]
+  reviews            Review[]
+  payoutAccount      PayoutAccount?
+  recommendations    AiRecommendation[]
+
+  @@index([userId])
+  @@index([slug])
+  @@index([verificationStatus])
+  @@index([availabilityStatus])
+  @@index([city, state, country])
+  @@index([averageRating])
+  @@index([deletedAt])
+  @@map("lawyer_profiles")
+}
+
+model PracticeArea {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  slug        String  @unique
+  description String? @db.Text
+  iconUrl     String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  lawyerAreas LawyerPracticeArea[]
+  cases       Case[]
+
+  @@index([slug])
+  @@map("practice_areas")
+}
+
+model LawyerPracticeArea {
+  id             String       @id @default(cuid())
+  lawyerProfileId String
+  practiceAreaId String
+  isPrimary      Boolean      @default(false)
+  yearsExp       Int          @default(0)
+
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+  practiceArea  PracticeArea  @relation(fields: [practiceAreaId], references: [id], onDelete: Cascade)
+
+  @@unique([lawyerProfileId, practiceAreaId])
+  @@map("lawyer_practice_areas")
+}
+
+model LawyerEducation {
+  id              String        @id @default(cuid())
+  lawyerProfileId String
+  degree          String
+  institution     String
+  fieldOfStudy    String?
+  startYear       Int
+  endYear         Int?
+  isOngoing       Boolean       @default(false)
+
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+
+  @@map("lawyer_educations")
+}
+
+model LawyerExperience {
+  id              String        @id @default(cuid())
+  lawyerProfileId String
+  title           String
+  organization    String
+  description     String?       @db.Text
+  startDate       DateTime
+  endDate         DateTime?
+  isCurrent       Boolean       @default(false)
+
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+
+  @@map("lawyer_experiences")
+}
+
+model LawyerDocument {
+  id              String   @id @default(cuid())
+  lawyerProfileId String
+  type            String
+  label           String
+  s3Key           String
+  s3Bucket        String
+  mimeType        String
+  sizeBytes       Int
+  isVerified      Boolean  @default(false)
+  uploadedAt      DateTime @default(now())
+
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+
+  @@map("lawyer_documents")
+}
+
+model LawyerAvailability {
+  id              String   @id @default(cuid())
+  lawyerProfileId String
+  dayOfWeek       Int      // 0=Sunday, 6=Saturday
+  startTime       String   // "09:00"
+  endTime         String   // "18:00"
+  slotDurationMin Int      @default(30)
+  isActive        Boolean  @default(true)
+
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([lawyerProfileId, dayOfWeek])
+  @@map("lawyer_availability")
+}
+
+// ============================================================
+// CASE / INTAKE DOMAIN
+// ============================================================
+
+model Case {
+  id                  String       @id @default(cuid())
+  caseNumber          String       @unique
+  clientProfileId     String
+  practiceAreaId      String?
+  title               String
+  description         String       @db.Text
+  status              CaseStatus   @default(DRAFT)
+  urgency             UrgencyLevel @default(MEDIUM)
+  aiClassification    String?
+  aiConfidenceScore   Decimal?     @db.Decimal(5, 4)
+  aiUrgencyScore      Decimal?     @db.Decimal(5, 4)
+  aiSummary           String?      @db.Text
+  aiExtractedEntities Json?
+  desiredOutcome      String?      @db.Text
+  budget              Decimal?     @db.Decimal(10, 2)
+  currency            String       @default("INR")
+  preferredLanguages  String[]     @default(["en"])
+  preferredLocation   String?
+  isAnonymous         Boolean      @default(false)
+  submittedAt         DateTime?
+  resolvedAt          DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  deletedAt           DateTime?
+
+  clientProfile  ClientProfile      @relation(fields: [clientProfileId], references: [id])
+  practiceArea   PracticeArea?      @relation(fields: [practiceAreaId], references: [id])
+  documents      Document[]
+  lawyerMatches  CaseLawyerMatch[]
+  appointments   Appointment[]
+  consultations  Consultation[]
+  recommendations AiRecommendation[]
+  aiLogs         AiLog[]
+
+  @@index([clientProfileId])
+  @@index([status])
+  @@index([urgency])
+  @@index([practiceAreaId])
+  @@index([caseNumber])
+  @@index([deletedAt])
+  @@map("cases")
+}
+
+model CaseLawyerMatch {
+  id              String   @id @default(cuid())
+  caseId          String
+  lawyerProfileId String
+  matchScore      Decimal  @db.Decimal(5, 4)
+  matchReason     Json?
+  isViewed        Boolean  @default(false)
+  isShortlisted   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  case          Case          @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, lawyerProfileId])
+  @@index([caseId])
+  @@index([lawyerProfileId])
+  @@map("case_lawyer_matches")
+}
+
+// ============================================================
+// APPOINTMENT & CONSULTATION DOMAIN
+// ============================================================
+
+model Appointment {
+  id                  String            @id @default(cuid())
+  appointmentNumber   String            @unique
+  caseId              String?
+  clientProfileId     String
+  lawyerProfileId     String
+  scheduledAt         DateTime
+  durationMin         Int               @default(30)
+  mode                ConsultationMode  @default(VIDEO)
+  status              AppointmentStatus @default(PENDING)
+  clientNotes         String?           @db.Text
+  lawyerNotes         String?           @db.Text
+  cancellationReason  String?
+  cancelledBy         String?
+  rescheduledFrom     String?
+  reminderSentAt      DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  case          Case?          @relation(fields: [caseId], references: [id])
+  clientProfile ClientProfile  @relation(fields: [clientProfileId], references: [id])
+  lawyerProfile LawyerProfile  @relation(fields: [lawyerProfileId], references: [id])
+  consultation  Consultation?
+  payment       Payment?
+
+  @@index([clientProfileId])
+  @@index([lawyerProfileId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("appointments")
+}
+
+model Consultation {
+  id                String             @id @default(cuid())
+  appointmentId     String             @unique
+  caseId            String?
+  lawyerProfileId   String
+  roomId            String             @unique
+  roomToken         String?
+  mode              ConsultationMode
+  status            ConsultationStatus @default(SCHEDULED)
+  startedAt         DateTime?
+  endedAt           DateTime?
+  actualDurationMin Int?
+  clientJoinedAt    DateTime?
+  lawyerJoinedAt    DateTime?
+  recordingUrl      String?
+  aiSummary         String?            @db.Text
+  lawyerNotes       String?            @db.Text
+  actionItems       Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id])
+  case          Case?          @relation(fields: [caseId], references: [id])
+  lawyerProfile LawyerProfile  @relation(fields: [lawyerProfileId], references: [id])
+  messages      Message[]
+  review        Review?
+
+  @@index([appointmentId])
+  @@index([lawyerProfileId])
+  @@index([status])
+  @@map("consultations")
+}
+
+// ============================================================
+// DOCUMENT DOMAIN
+// ============================================================
+
+model Document {
+  id              String         @id @default(cuid())
+  clientProfileId String?
+  caseId          String?
+  type            DocumentType   @default(LEGAL_DOCUMENT)
+  status          DocumentStatus @default(UPLOADING)
+  originalName    String
+  s3Key           String         @unique
+  s3Bucket        String
+  mimeType        String
+  sizeBytes       Int
+  checksum        String?
+  signedUrlExpiry DateTime?
+  ocrText         String?        @db.Text
+  aiSummary       String?        @db.Text
+  aiExtractedData Json?
+  metadata        Json?
+  isConfidential  Boolean        @default(true)
+  uploadedAt      DateTime       @default(now())
+  processedAt     DateTime?
+  deletedAt       DateTime?
+
+  clientProfile ClientProfile? @relation(fields: [clientProfileId], references: [id])
+  case          Case?          @relation(fields: [caseId], references: [id])
+
+  @@index([clientProfileId])
+  @@index([caseId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("documents")
+}
+
+// ============================================================
+// PAYMENT DOMAIN
+// ============================================================
+
+model Payment {
+  id                String          @id @default(cuid())
+  appointmentId     String?         @unique
+  clientId          String
+  lawyerProfileId   String
+  amount            Decimal         @db.Decimal(10, 2)
+  currency          String          @default("INR")
+  platformFee       Decimal         @default(0) @db.Decimal(10, 2)
+  lawyerPayout      Decimal         @db.Decimal(10, 2)
+  status            PaymentStatus   @default(PENDING)
+  provider          PaymentProvider @default(RAZORPAY)
+  providerOrderId   String?         @unique
+  providerPaymentId String?
+  providerSignature String?
+  escrowReleaseAt   DateTime?
+  refundAmount      Decimal?        @db.Decimal(10, 2)
+  refundReason      String?
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id])
+  invoice       Invoice?
+  payoutAccount PayoutAccount? @relation(fields: [lawyerProfileId], references: [lawyerProfileId])
+
+  @@index([clientId])
+  @@index([lawyerProfileId])
+  @@index([status])
+  @@index([providerOrderId])
+  @@map("payments")
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  paymentId   String   @unique
+  invoiceNumber String @unique
+  invoiceUrl  String?
+  s3Key       String?
+  issuedAt    DateTime @default(now())
+  dueAt       DateTime?
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@map("invoices")
+}
+
+model PayoutAccount {
+  id              String  @id @default(cuid())
+  lawyerProfileId String  @unique
+  provider        PaymentProvider
+  accountId       String
+  accountDetails  Json
+  isVerified      Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+  payments      Payment[]
+
+  @@map("payout_accounts")
+}
+
+// ============================================================
+// MESSAGING DOMAIN
+// ============================================================
+
+model Message {
+  id             String      @id @default(cuid())
+  consultationId String?
+  senderId       String
+  content        String      @db.Text
+  type           MessageType @default(TEXT)
+  metadata       Json?
+  isRead         Boolean     @default(false)
+  readAt         DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime    @default(now())
+
+  consultation Consultation? @relation(fields: [consultationId], references: [id])
+  sender       User          @relation("SentMessages", fields: [senderId], references: [id])
+
+  @@index([consultationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+// ============================================================
+// REVIEW DOMAIN
+// ============================================================
+
+model Review {
+  id              String   @id @default(cuid())
+  consultationId  String   @unique
+  clientProfileId String
+  lawyerProfileId String
+  rating          Int      // 1-5
+  title           String?
+  body            String?  @db.Text
+  isVerified      Boolean  @default(true)
+  isPublic        Boolean  @default(true)
+  lawyerResponse  String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  consultation  Consultation  @relation(fields: [consultationId], references: [id])
+  clientProfile ClientProfile @relation(fields: [clientProfileId], references: [id])
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id])
+
+  @@index([lawyerProfileId])
+  @@index([rating])
+  @@map("reviews")
+}
+
+// ============================================================
+// NOTIFICATION DOMAIN
+// ============================================================
+
+model Notification {
+  id         String              @id @default(cuid())
+  userId     String
+  type       NotificationType
+  channel    NotificationChannel @default(IN_APP)
+  title      String
+  body       String
+  data       Json?
+  isRead     Boolean             @default(false)
+  readAt     DateTime?
+  sentAt     DateTime?
+  failedAt   DateTime?
+  createdAt  DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// AI DOMAIN
+// ============================================================
+
+model AiLog {
+  id              String      @id @default(cuid())
+  caseId          String?
+  taskType        AiTaskType
+  model           String
+  inputTokens     Int         @default(0)
+  outputTokens    Int         @default(0)
+  latencyMs       Int?
+  inputData       Json?
+  outputData      Json?
+  confidenceScore Decimal?    @db.Decimal(5, 4)
+  error           String?
+  createdAt       DateTime    @default(now())
+
+  case Case? @relation(fields: [caseId], references: [id])
+
+  @@index([caseId])
+  @@index([taskType])
+  @@index([createdAt])
+  @@map("ai_logs")
+}
+
+model AiRecommendation {
+  id              String   @id @default(cuid())
+  caseId          String
+  lawyerProfileId String
+  rank            Int
+  score           Decimal  @db.Decimal(5, 4)
+  reasoning       Json?
+  factors         Json?
+  isAccepted      Boolean?
+  createdAt       DateTime @default(now())
+
+  case          Case          @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  lawyerProfile LawyerProfile @relation(fields: [lawyerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, lawyerProfileId])
+  @@index([caseId])
+  @@map("ai_recommendations")
+}
+
+// ============================================================
+// AUDIT / COMPLIANCE DOMAIN
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

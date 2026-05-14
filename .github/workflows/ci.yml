@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+
+  test-api:
+    name: API Tests
+    runs-on: ubuntu-latest
+    # Tests use a local postgres container — Neon is for production only
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lawsphere_test
+          POSTGRES_PASSWORD: test_secret
+          POSTGRES_DB: lawsphere_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      # Both point to the same local container in CI (no pooler)
+      DATABASE_URL: postgresql://lawsphere_test:test_secret@localhost:5432/lawsphere_test
+      DATABASE_URL_UNPOOLED: postgresql://lawsphere_test:test_secret@localhost:5432/lawsphere_test
+      JWT_SECRET: test-jwt-secret-32-chars-minimum-xx
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @lawsphere/database db:generate
+      - run: pnpm --filter @lawsphere/database run db:push
+      - run: pnpm --filter @lawsphere/api test
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck]
+    env:
+      # Dummy values — build only checks compilation, not DB connectivity
+      DATABASE_URL: postgresql://x:x@localhost:5432/x
+      DATABASE_URL_UNPOOLED: postgresql://x:x@localhost:5432/x
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @lawsphere/database db:generate
+      - run: pnpm run build
