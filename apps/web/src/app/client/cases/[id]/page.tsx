@@ -301,7 +301,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center">
                   <span className="text-slate-400">{label}</span>
-                  <span className={`font-medium text-right text-xs ${label === 'Complexity' && value !== '—' ? `px-2 py-0.5 rounded-full ${complexityColor[value] ?? ''}` : 'text-slate-900'}`}>
+                  <span className={`font-medium text-right text-xs ${label === 'Complexity' && value !== '—' ? `px-2 py-0.5 rounded-full ${complexityColor[value] || ''}` : 'text-slate-900'}`}>
                     {value}
                   </span>
                 </div>
