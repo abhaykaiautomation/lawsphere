@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (!isValid) return err('Invalid credentials', 401);
 
     const token = signToken(user.id, user.email, user.role);
-    return ok({ user: { id: user.id, email: user.email, role: user.role }, token });
+    return ok({ user: { id: user.id, email: user.email, role: user.role, status: user.status }, token });
   } catch (e) {
     return handleError(e);
   }

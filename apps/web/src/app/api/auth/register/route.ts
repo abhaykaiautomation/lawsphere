@@ -19,7 +19,11 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
-        data: { email, role, status: 'PENDING_VERIFICATION' },
+        data: {
+          email, role,
+          // Clients are active immediately; lawyers need admin approval
+          status: role === UserRole.CLIENT ? 'ACTIVE' : 'PENDING_VERIFICATION',
+        },
       });
 
       if (role === UserRole.CLIENT) {
@@ -41,7 +45,7 @@ export async function POST(req: NextRequest) {
     });
 
     const token = signToken(user.id, user.email, user.role);
-    return ok({ user: { id: user.id, email: user.email, role: user.role }, token }, 201);
+    return ok({ user: { id: user.id, email: user.email, role: user.role, status: user.status }, token }, 201);
   } catch (e) {
     return handleError(e);
   }
