@@ -42,7 +42,15 @@ export default function RegisterPage() {
       if (!res.ok) throw new Error('Registration failed');
       const { data } = await res.json();
       setAuth(data.user, data.token);
-      router.push(selectedRole === 'lawyer' ? '/lawyer/dashboard' : '/client/dashboard');
+
+      // Lawyers land on pending approval page; clients go straight to dashboard
+      if (data.user.role === 'ADMIN') {
+        router.push('/admin/dashboard');
+      } else if (data.user.role === 'LAWYER') {
+        router.push('/lawyer/pending');
+      } else {
+        router.push('/client/dashboard');
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Registration failed');
     } finally {
@@ -51,18 +59,20 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4">
-      <Link href="/" className="flex items-center gap-2 font-bold text-2xl text-primary mb-8">
-        <Scale className="h-7 w-7" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 py-12 px-4">
+      <Link href="/" className="flex items-center gap-2 font-bold text-2xl text-slate-900 mb-8">
+        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+          <Scale className="h-4 w-4 text-white" />
+        </div>
         LawSphere
       </Link>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border p-8">
-        <h1 className="text-2xl font-bold text-center mb-1">Create your account</h1>
-        <p className="text-sm text-muted-foreground text-center mb-6">Join thousands using LawSphere</p>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
+        <h1 className="text-2xl font-bold text-slate-900 text-center mb-1">Create your account</h1>
+        <p className="text-sm text-slate-500 text-center mb-7">Join thousands using LawSphere</p>
 
         {/* Role selector */}
-        <p className="text-sm text-muted-foreground mb-3 text-center">I want to join as</p>
+        <p className="text-sm text-slate-500 mb-3 text-center">I want to join as</p>
         <div className="grid grid-cols-2 gap-3 mb-6">
           {[
             { value: 'client', label: 'Client', icon: User, description: 'I need legal help' },
@@ -75,19 +85,25 @@ export default function RegisterPage() {
               className={cn(
                 'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-sm',
                 selectedRole === role.value
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border hover:border-primary/40',
+                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-200 hover:border-indigo-300 text-slate-600',
               )}
             >
               <role.icon className="h-6 w-6" />
               <span className="font-semibold">{role.label}</span>
-              <span className="text-xs text-muted-foreground">{role.description}</span>
+              <span className="text-xs text-slate-400">{role.description}</span>
             </button>
           ))}
         </div>
 
+        {selectedRole === 'lawyer' && (
+          <div className="mb-5 p-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-700">
+            <strong>Note:</strong> Lawyer accounts require admin approval before you can accept clients. You&apos;ll be notified once approved.
+          </div>
+        )}
+
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-600 text-sm text-center">
+          <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm text-center border border-red-100">
             {error}
           </div>
         )}
@@ -95,8 +111,7 @@ export default function RegisterPage() {
         <Button
           onClick={handleGoogleSignUp}
           disabled={loading}
-          className="w-full flex items-center gap-3"
-          variant="outline"
+          className="w-full flex items-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm"
           size="lg"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -108,15 +123,14 @@ export default function RegisterPage() {
           {loading ? 'Creating account…' : 'Continue with Google'}
         </Button>
 
-        <p className="mt-6 text-xs text-muted-foreground text-center">
+        <p className="mt-5 text-xs text-slate-400 text-center">
           By registering, you agree to our{' '}
-          <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link> and{' '}
-          <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+          <Link href="/terms" className="text-indigo-600 hover:underline">Terms</Link> and{' '}
+          <Link href="/privacy" className="text-indigo-600 hover:underline">Privacy Policy</Link>.
         </p>
-
-        <p className="mt-3 text-center text-sm text-muted-foreground">
+        <p className="mt-3 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-primary font-medium hover:underline">Sign in</Link>
+          <Link href="/login" className="text-indigo-600 font-medium hover:underline">Sign in</Link>
         </p>
       </div>
     </div>

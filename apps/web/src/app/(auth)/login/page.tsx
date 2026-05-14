@@ -25,13 +25,22 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/firebase-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Login doesn't specify role — server uses existing role or admin email check
         body: JSON.stringify({ idToken, role: 'CLIENT' }),
       });
 
       if (!res.ok) throw new Error('Sign-in failed');
       const { data } = await res.json();
       setAuth(data.user, data.token);
-      router.push('/client/dashboard');
+
+      // Redirect based on role and status
+      if (data.user.role === 'ADMIN') {
+        router.push('/admin/dashboard');
+      } else if (data.user.role === 'LAWYER') {
+        router.push(data.user.status === 'ACTIVE' ? '/lawyer/dashboard' : '/lawyer/pending');
+      } else {
+        router.push('/client/dashboard');
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Sign-in failed');
     } finally {
@@ -44,18 +53,14 @@ export default function LoginPage() {
       {/* Left panel */}
       <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-primary/90 to-blue-800 text-white flex-col justify-between p-12">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <Scale className="h-6 w-6" />
-          LawSphere
+          <Scale className="h-6 w-6" />LawSphere
         </Link>
         <div>
           <blockquote className="text-2xl font-medium leading-relaxed mb-6">
-            "LawSphere connected me with the perfect family lawyer in minutes. The AI intake was
-            incredibly accurate."
+            "LawSphere connected me with the perfect family lawyer in minutes."
           </blockquote>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">
-              PR
-            </div>
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">PR</div>
             <div>
               <div className="font-medium">Priya Rajan</div>
               <div className="text-sm text-blue-200">Startup Founder, Bangalore</div>
@@ -66,20 +71,18 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50">
         <div className="w-full max-w-sm">
-          <div className="lg:hidden flex items-center justify-center gap-2 mb-8 font-bold text-xl text-primary">
-            <Scale className="h-6 w-6" />
-            LawSphere
-          </div>
-
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold">Welcome back</h1>
-            <p className="text-muted-foreground mt-1 text-sm">Sign in to your LawSphere account</p>
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-4">
+              <Scale className="h-6 w-6 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">Welcome back</h1>
+            <p className="text-slate-500 mt-1 text-sm">Sign in to your LawSphere account</p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-600 text-sm text-center">
+            <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm text-center border border-red-100">
               {error}
             </div>
           )}
@@ -87,8 +90,7 @@ export default function LoginPage() {
           <Button
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full flex items-center gap-3"
-            variant="outline"
+            className="w-full flex items-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm"
             size="lg"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -100,11 +102,9 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Continue with Google'}
           </Button>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-slate-500">
             Don&apos;t have an account?{' '}
-            <Link href="/register" className="text-primary font-medium hover:underline">
-              Sign up
-            </Link>
+            <Link href="/register" className="text-indigo-600 font-medium hover:underline">Sign up</Link>
           </p>
         </div>
       </div>
