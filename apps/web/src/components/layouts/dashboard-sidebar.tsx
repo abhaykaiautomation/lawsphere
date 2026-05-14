@@ -6,40 +6,71 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useRouter } from 'next/navigation';
 import {
   Scale, LayoutDashboard, FileText, Calendar, Users,
-  MessageSquare, Bell, Settings, LogOut, PlusCircle, Shield, LogIn,
+  MessageSquare, Bell, Settings, LogOut, PlusCircle,
+  Shield, LogIn, BarChart2, UserCheck, Briefcase,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const clientNav = [
-  { href: '/client/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/client/intake', icon: PlusCircle, label: 'New Case' },
-  { href: '/lawyers', icon: Users, label: 'Find Lawyers' },
-  { href: '/client/consultations', icon: Calendar, label: 'Consultations' },
-  { href: '/client/documents', icon: FileText, label: 'Documents' },
-  { href: '/client/messages', icon: MessageSquare, label: 'Messages' },
-];
+// ─── Portal configs ──────────────────────────────────────────────────────────
 
-const lawyerNav = [
-  { href: '/lawyer/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/lawyer/appointments', icon: Calendar, label: 'Appointments' },
-  { href: '/lawyer/profile', icon: Users, label: 'My Profile' },
-  { href: '/lawyer/documents', icon: FileText, label: 'Documents' },
-  { href: '/lawyer/messages', icon: MessageSquare, label: 'Messages' },
-];
+const portals = {
+  client: {
+    label: 'Client Portal',
+    accent: 'bg-indigo-600',
+    activeItem: 'bg-indigo-600',
+    signInBg: 'bg-indigo-600 hover:bg-indigo-700',
+    badge: 'bg-indigo-500',
+    nav: [
+      { href: '/client/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { href: '/client/intake',    icon: PlusCircle,      label: 'New Case' },
+      { href: '/lawyers',          icon: Users,           label: 'Find Lawyers' },
+      { href: '/client/consultations', icon: Calendar,    label: 'Consultations' },
+      { href: '/client/documents', icon: FileText,        label: 'Documents' },
+      { href: '/client/messages',  icon: MessageSquare,   label: 'Messages' },
+    ],
+  },
+  lawyer: {
+    label: 'Lawyer Portal',
+    accent: 'bg-emerald-600',
+    activeItem: 'bg-emerald-600',
+    signInBg: 'bg-emerald-600 hover:bg-emerald-700',
+    badge: 'bg-emerald-500',
+    nav: [
+      { href: '/lawyer/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
+      { href: '/lawyer/appointments', icon: Calendar,        label: 'Appointments' },
+      { href: '/lawyer/profile',      icon: Briefcase,       label: 'My Profile' },
+      { href: '/lawyer/documents',    icon: FileText,        label: 'Documents' },
+      { href: '/lawyer/messages',     icon: MessageSquare,   label: 'Messages' },
+    ],
+  },
+  admin: {
+    label: 'Admin Portal',
+    accent: 'bg-violet-600',
+    activeItem: 'bg-violet-600',
+    signInBg: 'bg-violet-600 hover:bg-violet-700',
+    badge: 'bg-violet-500',
+    nav: [
+      { href: '/admin/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
+      { href: '/admin/users',         icon: Users,           label: 'Users' },
+      { href: '/admin/verifications', icon: UserCheck,       label: 'Verifications' },
+      { href: '/admin/analytics',     icon: BarChart2,       label: 'Analytics' },
+    ],
+  },
+};
 
-const adminNav = [
-  { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/admin/users', icon: Users, label: 'Users' },
-  { href: '/admin/verifications', icon: Shield, label: 'Verifications' },
-  { href: '/admin/analytics', icon: FileText, label: 'Analytics' },
-];
+function getPortal(pathname: string) {
+  if (pathname.startsWith('/lawyer')) return portals.lawyer;
+  if (pathname.startsWith('/admin'))  return portals.admin;
+  return portals.client;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
-
-  const nav = user?.role === 'LAWYER' ? lawyerNav : user?.role === 'ADMIN' ? adminNav : clientNav;
+  const portal = getPortal(pathname);
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? 'U';
 
   function handleLogout() {
@@ -49,18 +80,22 @@ export function DashboardSidebar() {
 
   return (
     <aside className="w-64 min-h-screen bg-slate-900 text-white flex flex-col fixed left-0 top-0 z-40">
-      {/* Logo */}
+
+      {/* Logo + portal badge */}
       <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-700">
-        <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
+        <div className={`w-8 h-8 rounded-lg ${portal.accent} flex items-center justify-center shrink-0`}>
           <Scale className="h-5 w-5 text-white" />
         </div>
-        <span className="font-bold text-lg tracking-tight">LawSphere</span>
+        <div className="min-w-0">
+          <p className="font-bold text-sm leading-tight">LawSphere</p>
+          <p className="text-xs text-slate-400 truncate">{portal.label}</p>
+        </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-6 space-y-1">
-        {nav.map((item) => {
-          const active = pathname === item.href;
+      <nav className="flex-1 px-3 py-5 space-y-0.5">
+        {portal.nav.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
             <Link
               key={item.href}
@@ -68,7 +103,7 @@ export function DashboardSidebar() {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
                 active
-                  ? 'bg-indigo-600 text-white'
+                  ? `${portal.activeItem} text-white`
                   : 'text-slate-400 hover:text-white hover:bg-slate-800',
               )}
             >
@@ -80,20 +115,18 @@ export function DashboardSidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className="px-3 pb-6 space-y-1 border-t border-slate-700 pt-4">
+      <div className="px-3 pb-5 space-y-0.5 border-t border-slate-700 pt-4">
         <Link href="/notifications" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
-          <Bell className="h-4 w-4" />
-          Notifications
+          <Bell className="h-4 w-4 shrink-0" />Notifications
         </Link>
         <Link href="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
-          <Settings className="h-4 w-4" />
-          Settings
+          <Settings className="h-4 w-4 shrink-0" />Settings
         </Link>
 
-        {/* User / Sign-in */}
+        {/* User card / Sign-in */}
         {user ? (
-          <div className="flex items-center gap-3 px-3 py-3 mt-2 rounded-lg bg-slate-800">
-            <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold shrink-0">
+          <div className="flex items-center gap-3 px-3 py-3 mt-1 rounded-lg bg-slate-800">
+            <div className={`w-8 h-8 rounded-full ${portal.badge} flex items-center justify-center text-xs font-bold shrink-0`}>
               {initials}
             </div>
             <div className="flex-1 min-w-0">
@@ -105,7 +138,7 @@ export function DashboardSidebar() {
             </button>
           </div>
         ) : (
-          <Link href="/login" className="flex items-center gap-3 px-3 py-3 mt-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-colors">
+          <Link href="/login" className={`flex items-center gap-3 px-3 py-3 mt-1 rounded-lg ${portal.signInBg} transition-colors`}>
             <LogIn className="h-4 w-4 text-white shrink-0" />
             <span className="text-sm font-semibold text-white">Sign In</span>
           </Link>
