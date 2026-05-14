@@ -37,10 +37,15 @@ interface Case {
   aiSummary: string | null;
 }
 
+// Wrapper handles auth check — keeps all hooks inside IntakeForm unconditional
 export default function IntakePage() {
-  const user    = useAuthStore((s) => s.user);
-  const token   = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   if (!user) return <SignInPrompt message="Sign in to submit a legal issue" />;
+  return <IntakeForm />;
+}
+
+function IntakeForm() {
+  const token   = useAuthStore((s) => s.token);
 
   const router  = useRouter();
   const [step, setStep]       = useState<0 | 1 | 2>(0);
