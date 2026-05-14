@@ -264,7 +264,7 @@ export default async function LawyerProfilePage({ params }: { params: Promise<{ 
               </div>
 
               <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 font-semibold gap-2">
-                <Link href={`/client/intake?lawyer=${lawyer.slug}`}>
+                <Link href={`/client/book/${lawyer.slug}`}>
                   <Calendar className="h-4 w-4" />Book Consultation
                 </Link>
               </Button>

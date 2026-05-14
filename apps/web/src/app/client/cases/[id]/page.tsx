@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   ArrowLeft, FileText, Brain, Calendar, MessageSquare,
   AlertCircle, Sparkles, CheckCircle2, BookOpen,
-  ChevronRight, AlertTriangle, Clock, Scale,
+  ChevronRight, AlertTriangle, Clock, Scale, ExternalLink,
 } from 'lucide-react';
 
 interface AiData {
@@ -200,18 +200,37 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                       <BookOpen className="h-4 w-4 text-violet-500" />Relevant Case References & Statutes
                     </h3>
                     <div className="space-y-3">
-                      {ai.caseReferences.map((ref, i) => (
-                        <div key={i} className="p-3.5 rounded-xl border border-slate-100 bg-slate-50">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-900">{ref.name}</p>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{ref.year}</span>
-                              <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{ref.court}</span>
+                      {ai.caseReferences.map((ref, i) => {
+                        const searchUrl = `https://indiankanoon.org/search/?formInput=${encodeURIComponent(ref.name)}`;
+                        return (
+                          <div key={i} className="p-3.5 rounded-xl border border-slate-100 bg-slate-50 hover:border-violet-200 transition-colors">
+                            <div className="flex items-start justify-between gap-2">
+                              <a
+                                href={searchUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-violet-700 hover:text-violet-900 hover:underline flex items-center gap-1.5 group"
+                              >
+                                {ref.name}
+                                <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100 shrink-0" />
+                              </a>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{ref.year}</span>
+                                <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{ref.court}</span>
+                              </div>
                             </div>
+                            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{ref.relevance}</p>
+                            <a
+                              href={searchUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 mt-2 text-xs text-violet-600 hover:text-violet-800 font-medium"
+                            >
+                              Search on Indian Kanoon <ExternalLink className="h-3 w-3" />
+                            </a>
                           </div>
-                          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{ref.relevance}</p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
