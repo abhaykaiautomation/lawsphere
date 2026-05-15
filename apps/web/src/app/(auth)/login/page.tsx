@@ -50,12 +50,9 @@ export default function LoginPage() {
       if (!res.ok) throw new Error(body.message ?? 'Sign-in failed');
       if (body.data.needsRegistration) { router.push('/register'); return; }
 
-      // Enforce role match
-      if (role === 'admin' && body.data.user.role !== 'ADMIN') {
-        throw new Error('This account does not have admin access.');
-      }
-      if (role === 'client' && body.data.user.role !== 'CLIENT') {
-        throw new Error('This Google account is registered as a ' + body.data.user.role.toLowerCase() + '. Please select the correct role.');
+      // Enforce client-only Google sign-in
+      if (body.data.user.role !== 'CLIENT') {
+        throw new Error('This Google account is registered as a ' + body.data.user.role.toLowerCase() + '. Lawyers and admins use email/password sign-in.');
       }
 
       setAuth(body.data.user, body.data.token);
@@ -83,8 +80,8 @@ export default function LoginPage() {
         setAuth(body.data.user, body.data.token);
         redirect(body.data.user);
 
-      } else if (role === 'lawyer') {
-        // Firebase email/password — credentials created by admin on approval
+      } else if (role === 'lawyer' || role === 'admin') {
+        // Firebase email/password — lawyer credentials from admin, admin credentials from setup script
         const cred    = await signInWithEmailAndPassword(auth, email, password);
         const idToken = await cred.user.getIdToken();
         const res     = await fetch('/api/auth/firebase-sync', {
@@ -95,8 +92,9 @@ export default function LoginPage() {
         const body = await res.json();
         if (!res.ok) throw new Error(body.message ?? 'Sign-in failed');
 
-        if (body.data.user.role !== 'LAWYER') {
-          throw new Error('This account is not registered as a lawyer.');
+        const expectedRole = role.toUpperCase();
+        if (body.data.user.role !== expectedRole) {
+          throw new Error(`This account is not registered as a ${role}. Please select the correct role.`);
         }
         setAuth(body.data.user, body.data.token);
         redirect(body.data.user);
@@ -241,18 +239,29 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* ── ADMIN: Google only ───────────────────────────────────────── */}
+          {/* ── ADMIN: Firebase email/password only ─────────────────────── */}
           {role === 'admin' && (
             <div className="space-y-4">
               <div className="bg-violet-50 border border-violet-100 rounded-xl p-3.5 text-xs text-violet-700 leading-relaxed">
                 <p className="font-semibold mb-1">Admin Sign-In</p>
-                Admin accounts are linked to a specific Google account. Only authorised emails can access the admin portal.
+                Use the credentials shared with you by the platform owner. Unauthorised access is monitored.
               </div>
-              <Button onClick={handleGoogle} disabled={loading}
-                className="w-full flex items-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-12" size="lg">
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleIcon />}
-                {loading ? 'Signing in…' : 'Continue with Google'}
-              </Button>
+              <form onSubmit={handleEmail} className="space-y-3">
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="Admin email address"
+                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+                <div className="relative">
+                  <input type={showPwd ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="Admin password"
+                    className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent" />
+                  <button type="button" onClick={() => setShowPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button type="submit" disabled={loading} className={`w-full h-11 font-semibold ${accentColor}`} size="lg">
+                  {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Verifying…</> : 'Sign In as Admin'}
+                </Button>
+              </form>
             </div>
           )}
 
