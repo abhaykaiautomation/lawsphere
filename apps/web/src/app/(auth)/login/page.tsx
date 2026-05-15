@@ -49,12 +49,6 @@ export default function LoginPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? 'Sign-in failed');
       if (body.data.needsRegistration) { router.push('/register'); return; }
-
-      // Enforce client-only Google sign-in
-      if (body.data.user.role !== 'CLIENT') {
-        throw new Error('This Google account is registered as a ' + body.data.user.role.toLowerCase() + '. Lawyers and admins use email/password sign-in.');
-      }
-
       setAuth(body.data.user, body.data.token);
       redirect(body.data.user);
     } catch (e: unknown) {
@@ -182,6 +176,7 @@ export default function LoginPage() {
           {role === 'client' && (
             <div className="space-y-4">
               <Button onClick={handleGoogle} disabled={loading}
+                title="Google sign-in auto-detects your role and redirects you to the right portal"
                 className="w-full flex items-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-12" size="lg">
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleIcon />}
                 {loading ? 'Signing in…' : 'Continue with Google'}
