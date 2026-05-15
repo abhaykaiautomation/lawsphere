@@ -49,6 +49,19 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── 3b. Block lawyers who haven't been approved yet ──────────────────────
+    if (user && user.role === UserRole.LAWYER) {
+      if (user.status === 'PENDING_VERIFICATION') {
+        return err('Your application is pending admin approval. You will receive login credentials once approved.', 403);
+      }
+      if (user.status === 'INACTIVE') {
+        return err('Your lawyer account has been deactivated. Please contact support.', 403);
+      }
+      if (user.status === 'SUSPENDED') {
+        return err('Your account has been suspended. Please contact support.', 403);
+      }
+    }
+
     // ── 4. New user — needs role selection unless admin ───────────────────────
     if (!user) {
       if (!requestedRole && !isAdmin) {

@@ -7,13 +7,22 @@ import { signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 import { useAuthStore } from '@/stores/auth.store';
 import { Button } from '@/components/ui/button';
-import { Scale, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Scale, Loader2, Eye, EyeOff, User, Briefcase, Shield } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+type Role = 'client' | 'lawyer' | 'admin';
+
+const ROLES = [
+  { value: 'client' as Role, icon: User,     label: 'Client',  desc: 'I need legal help' },
+  { value: 'lawyer' as Role, icon: Briefcase, label: 'Lawyer',  desc: 'I provide legal services' },
+  { value: 'admin'  as Role, icon: Shield,   label: 'Admin',   desc: 'Platform management' },
+];
 
 export default function LoginPage() {
   const router  = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
 
-  const [mode,     setMode]     = useState<'google' | 'email'>('google');
+  const [role,     setRole]     = useState<Role>('client');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
   const [email,    setEmail]    = useState('');
@@ -26,153 +35,232 @@ export default function LoginPage() {
     router.push('/client/dashboard');
   }
 
-  // ── Google (all roles) ─────────────────────────────────────────────────────
+  // ── Google sign-in (Client + Admin only) ────────────────────────────────────
   async function handleGoogle() {
     setLoading(true); setError('');
     try {
       const result  = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();
       const res     = await fetch('/api/auth/firebase-sync', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
       });
-      if (!res.ok) throw new Error('Sign-in failed');
-      const { data } = await res.json();
-      if (data.needsRegistration) { router.push('/register'); return; }
-      setAuth(data.user, data.token);
-      redirect(data.user);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? 'Sign-in failed');
+      if (body.data.needsRegistration) { router.push('/register'); return; }
+
+      // Enforce role match
+      if (role === 'admin' && body.data.user.role !== 'ADMIN') {
+        throw new Error('This account does not have admin access.');
+      }
+      if (role === 'client' && body.data.user.role !== 'CLIENT') {
+        throw new Error('This Google account is registered as a ' + body.data.user.role.toLowerCase() + '. Please select the correct role.');
+      }
+
+      setAuth(body.data.user, body.data.token);
+      redirect(body.data.user);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Sign-in failed');
+      const msg = e instanceof Error ? e.message : 'Sign-in failed';
+      setError(msg.replace('Firebase: ', '').replace(' (auth/popup-closed-by-user).', ''));
     } finally { setLoading(false); }
   }
 
-  // ── Email/password ─────────────────────────────────────────────────────────
-  // Tries custom API (clients) first; falls back to Firebase (lawyers) if needed
+  // ── Email/password (Client: custom API | Lawyer: Firebase email/password) ──
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      // 1. Try client email/password (custom bcrypt auth)
-      const res  = await fetch('/api/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const body = await res.json();
-
-      if (res.ok) {
+      if (role === 'client') {
+        // Custom bcrypt auth — clients only
+        const res  = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.message ?? 'Invalid credentials');
         setAuth(body.data.user, body.data.token);
         redirect(body.data.user);
-        return;
-      }
 
-      // 2. If "use social login" → this is a Firebase account (lawyer)
-      if (res.status === 400 && body.message?.toLowerCase().includes('social')) {
+      } else if (role === 'lawyer') {
+        // Firebase email/password — credentials created by admin on approval
         const cred    = await signInWithEmailAndPassword(auth, email, password);
         const idToken = await cred.user.getIdToken();
-        const syncRes = await fetch('/api/auth/firebase-sync', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const res     = await fetch('/api/auth/firebase-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idToken }),
         });
-        if (!syncRes.ok) throw new Error('Sign-in failed');
-        const { data } = await syncRes.json();
-        setAuth(data.user, data.token);
-        redirect(data.user);
-        return;
-      }
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.message ?? 'Sign-in failed');
 
-      throw new Error(body.message ?? 'Invalid credentials');
+        if (body.data.user.role !== 'LAWYER') {
+          throw new Error('This account is not registered as a lawyer.');
+        }
+        setAuth(body.data.user, body.data.token);
+        redirect(body.data.user);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Sign-in failed';
-      // Convert Firebase error codes to user-friendly messages
       if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password')) {
-        setError('Invalid email or password');
+        setError('Invalid email or password. Please check your credentials.');
       } else if (msg.includes('auth/user-not-found')) {
-        setError('No account found with this email');
+        setError('No account found with this email.');
+      } else if (msg.includes('auth/too-many-requests')) {
+        setError('Too many failed attempts. Please try again later.');
       } else {
-        setError(msg);
+        setError(msg.replace('Firebase: ', ''));
       }
     } finally { setLoading(false); }
   }
 
+  const accentColor = role === 'lawyer' ? 'bg-emerald-600 hover:bg-emerald-700'
+    : role === 'admin' ? 'bg-violet-600 hover:bg-violet-700'
+    : 'bg-indigo-600 hover:bg-indigo-700';
+
   return (
     <div className="min-h-screen flex">
-      {/* Left */}
+      {/* Left panel */}
       <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-900 text-white flex-col justify-between p-12">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center"><Scale className="h-4 w-4 text-white" /></div>
+          <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
+            <Scale className="h-4 w-4 text-white" />
+          </div>
           LawSphere
         </Link>
         <div>
-          <blockquote className="text-2xl font-medium leading-relaxed mb-6">"LawSphere connected me with the perfect family lawyer in minutes."</blockquote>
+          <blockquote className="text-2xl font-medium leading-relaxed mb-6">
+            "LawSphere connected me with the perfect family lawyer in minutes."
+          </blockquote>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">PR</div>
-            <div><div className="font-medium">Priya Rajan</div><div className="text-sm text-indigo-300">Startup Founder, Bangalore</div></div>
+            <div>
+              <div className="font-medium">Priya Rajan</div>
+              <div className="text-sm text-indigo-300">Startup Founder, Bangalore</div>
+            </div>
           </div>
         </div>
         <div className="text-indigo-300 text-sm">Trusted by 10,000+ clients across India</div>
       </div>
 
-      {/* Right */}
+      {/* Right panel */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50">
         <div className="w-full max-w-sm">
           <div className="text-center mb-7">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-4"><Scale className="h-6 w-6 text-white" /></div>
-            <h1 className="text-2xl font-bold text-slate-900">Welcome back</h1>
-            <p className="text-slate-500 mt-1 text-sm">Sign in to your LawSphere account</p>
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-4">
+              <Scale className="h-6 w-6 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">Sign In</h1>
+            <p className="text-slate-500 mt-1 text-sm">Select your role to continue</p>
           </div>
 
-          {/* Tabs */}
-          <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
-            {(['google', 'email'] as const).map(m => (
-              <button key={m} onClick={() => { setMode(m); setError(''); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all capitalize ${mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                {m === 'google' ? 'Google' : 'Email / Password'}
+          {/* Role selector */}
+          <div className="grid grid-cols-3 gap-2 mb-6">
+            {ROLES.map(r => (
+              <button key={r.value} onClick={() => { setRole(r.value); setError(''); }}
+                className={cn(
+                  'flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-xs font-medium',
+                  role === r.value
+                    ? r.value === 'lawyer' ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                      : r.value === 'admin' ? 'border-violet-600 bg-violet-50 text-violet-700'
+                      : 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-500',
+                )}>
+                <r.icon className="h-5 w-5" />
+                <span className="font-semibold">{r.label}</span>
+                <span className="text-xs text-slate-400 font-normal leading-tight text-center">{r.desc}</span>
               </button>
             ))}
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm text-center border border-red-100">{error}</div>
+            <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm text-center border border-red-100">
+              {error}
+            </div>
           )}
 
-          {mode === 'google' && (
+          {/* ── CLIENT: Google + Email/Password ─────────────────────────── */}
+          {role === 'client' && (
             <div className="space-y-4">
               <Button onClick={handleGoogle} disabled={loading}
                 className="w-full flex items-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-12" size="lg">
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleIcon />}
                 {loading ? 'Signing in…' : 'Continue with Google'}
               </Button>
-              <p className="text-xs text-slate-400 text-center">Works for clients, lawyers, and admins</p>
-            </div>
-          )}
 
-          {mode === 'email' && (
-            <form onSubmit={handleEmail} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
-                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+              <div className="relative flex items-center gap-3">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-xs text-slate-400 font-medium">or</span>
+                <div className="flex-1 h-px bg-slate-200" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+
+              <form onSubmit={handleEmail} className="space-y-3">
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                 <div className="relative">
-                  <input type={showPwd ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password"
+                  <input type={showPwd ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="Password"
                     className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                   <button type="button" onClick={() => setShowPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                     {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <Button type="submit" disabled={loading} className={`w-full h-11 font-semibold ${accentColor}`} size="lg">
+                  {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</> : 'Sign In with Email'}
+                </Button>
+              </form>
+            </div>
+          )}
+
+          {/* ── LAWYER: Firebase email/password only ────────────────────── */}
+          {role === 'lawyer' && (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3.5 text-xs text-emerald-700 leading-relaxed">
+                <p className="font-semibold mb-1">Lawyer Sign-In</p>
+                Use the <strong>email and temporary password</strong> sent to you after your application was approved by admin. Haven&apos;t applied yet?{' '}
+                <Link href="/lawyer-apply" className="underline font-semibold">Apply here</Link>
               </div>
-              <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 font-semibold" size="lg">
-                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</> : 'Sign In'}
+              <form onSubmit={handleEmail} className="space-y-3">
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="Your registered email"
+                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                <div className="relative">
+                  <input type={showPwd ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="Password from admin credentials"
+                    className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                  <button type="button" onClick={() => setShowPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button type="submit" disabled={loading} className={`w-full h-11 font-semibold ${accentColor}`} size="lg">
+                  {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Verifying…</> : 'Sign In as Lawyer'}
+                </Button>
+              </form>
+            </div>
+          )}
+
+          {/* ── ADMIN: Google only ───────────────────────────────────────── */}
+          {role === 'admin' && (
+            <div className="space-y-4">
+              <div className="bg-violet-50 border border-violet-100 rounded-xl p-3.5 text-xs text-violet-700 leading-relaxed">
+                <p className="font-semibold mb-1">Admin Sign-In</p>
+                Admin accounts are linked to a specific Google account. Only authorised emails can access the admin portal.
+              </div>
+              <Button onClick={handleGoogle} disabled={loading}
+                className="w-full flex items-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-12" size="lg">
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleIcon />}
+                {loading ? 'Signing in…' : 'Continue with Google'}
               </Button>
-              <p className="text-xs text-slate-400 text-center">Clients use their registered password · Lawyers use credentials received after approval</p>
-            </form>
+            </div>
           )}
 
           <p className="mt-6 text-center text-sm text-slate-500">
             Don&apos;t have an account?{' '}
             <Link href="/register" className="text-indigo-600 font-medium hover:underline">Sign up</Link>
+            {' · '}
+            <Link href="/lawyer-apply" className="text-emerald-600 font-medium hover:underline">Apply as lawyer</Link>
           </p>
         </div>
       </div>
