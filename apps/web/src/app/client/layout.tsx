@@ -1,4 +1,5 @@
 import { DashboardSidebar } from '@/components/layouts/dashboard-sidebar';
+import { LegalAssistant } from '@/components/common/legal-assistant';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -7,6 +8,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <main className="flex-1 ml-64">
         <div className="p-8">{children}</div>
       </main>
+      {/* Floating AI legal assistant — visible across all client pages */}
+      <LegalAssistant />
     </div>
   );
 }
