@@ -3,21 +3,45 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Bell, Shield, Palette, Globe, LogOut, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuthStore } from '@/stores/auth.store';
+import { useRouter } from 'next/navigation';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
-    <button
-      onClick={onChange}
-      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-slate-200'}`}
-    >
+    <button onClick={onChange}
+      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-slate-200'}`}>
       <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
     </button>
   );
 }
 
 export default function SettingsPage() {
-  const [notifs, setNotifs] = useState({ email: true, sms: false, push: true, marketing: false });
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const router    = useRouter();
+
+  const [notifs,  setNotifs]  = useState({ email: true, sms: false, push: true, marketing: false });
   const [privacy, setPrivacy] = useState({ profileVisible: true, showRating: true });
+  const [lang,    setLang]    = useState('English');
+
+  function toggleNotif(key: keyof typeof notifs) {
+    setNotifs(p => { const next = { ...p, [key]: !p[key] }; toast.success('Notification preferences saved'); return next; });
+  }
+
+  function togglePrivacy(key: keyof typeof privacy) {
+    setPrivacy(p => { const next = { ...p, [key]: !p[key] }; toast.success('Privacy settings saved'); return next; });
+  }
+
+  function handleLangChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    setLang(e.target.value);
+    toast.success(`Language set to ${e.target.value}`);
+  }
+
+  function handleSignOut() {
+    clearAuth();
+    router.push('/login');
+    toast.success('Signed out successfully');
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -39,20 +63,18 @@ export default function SettingsPage() {
         </div>
         <div className="divide-y divide-slate-100">
           {[
-            { key: 'email', label: 'Email Notifications', desc: 'Receive updates via email' },
-            { key: 'sms', label: 'SMS Notifications', desc: 'Receive updates via text message' },
-            { key: 'push', label: 'Push Notifications', desc: 'Receive browser push notifications' },
-            { key: 'marketing', label: 'Marketing Emails', desc: 'Tips, updates and promotional offers' },
+            { key: 'email',     label: 'Email Notifications', desc: 'Receive updates via email' },
+            { key: 'sms',       label: 'SMS Notifications',   desc: 'Receive updates via text message' },
+            { key: 'push',      label: 'Push Notifications',  desc: 'Receive browser push notifications' },
+            { key: 'marketing', label: 'Marketing Emails',    desc: 'Tips, updates and promotional offers' },
           ].map((item) => (
             <div key={item.key} className="flex items-center justify-between px-6 py-4">
               <div>
                 <p className="text-sm font-medium text-slate-900">{item.label}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{item.desc}</p>
               </div>
-              <Toggle
-                checked={notifs[item.key as keyof typeof notifs]}
-                onChange={() => setNotifs(p => ({ ...p, [item.key]: !p[item.key as keyof typeof notifs] }))}
-              />
+              <Toggle checked={notifs[item.key as keyof typeof notifs]}
+                onChange={() => toggleNotif(item.key as keyof typeof notifs)} />
             </div>
           ))}
         </div>
@@ -71,18 +93,16 @@ export default function SettingsPage() {
         </div>
         <div className="divide-y divide-slate-100">
           {[
-            { key: 'profileVisible', label: 'Public Profile', desc: 'Allow others to find your profile' },
-            { key: 'showRating', label: 'Show Ratings', desc: 'Display your ratings publicly' },
+            { key: 'profileVisible', label: 'Public Profile',  desc: 'Allow others to find your profile' },
+            { key: 'showRating',     label: 'Show Ratings',    desc: 'Display your ratings publicly' },
           ].map((item) => (
             <div key={item.key} className="flex items-center justify-between px-6 py-4">
               <div>
                 <p className="text-sm font-medium text-slate-900">{item.label}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{item.desc}</p>
               </div>
-              <Toggle
-                checked={privacy[item.key as keyof typeof privacy]}
-                onChange={() => setPrivacy(p => ({ ...p, [item.key]: !p[item.key as keyof typeof privacy] }))}
-              />
+              <Toggle checked={privacy[item.key as keyof typeof privacy]}
+                onChange={() => togglePrivacy(item.key as keyof typeof privacy)} />
             </div>
           ))}
         </div>
@@ -94,9 +114,7 @@ export default function SettingsPage() {
           <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center">
             <Palette className="h-4 w-4 text-violet-600" />
           </div>
-          <div>
-            <h2 className="font-semibold text-slate-900">Preferences</h2>
-          </div>
+          <h2 className="font-semibold text-slate-900">Preferences</h2>
         </div>
         <div className="divide-y divide-slate-100">
           <div className="flex items-center justify-between px-6 py-4">
@@ -107,12 +125,11 @@ export default function SettingsPage() {
                 <p className="text-xs text-slate-400">Select your preferred language</p>
               </div>
             </div>
-            <select className="text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-700">
-              <option>English</option>
-              <option>Hindi</option>
-              <option>Tamil</option>
-              <option>Telugu</option>
-              <option>Marathi</option>
+            <select value={lang} onChange={handleLangChange}
+              className="text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-700">
+              {['English', 'Hindi', 'Tamil', 'Telugu', 'Marathi', 'Gujarati', 'Kannada'].map(l => (
+                <option key={l}>{l}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -129,7 +146,7 @@ export default function SettingsPage() {
               <p className="text-sm font-medium text-slate-900">Sign Out</p>
               <p className="text-xs text-slate-400">Sign out from your account</p>
             </div>
-            <Button variant="outline" size="sm" className="gap-2 text-slate-600 h-8">
+            <Button variant="outline" size="sm" onClick={handleSignOut} className="gap-2 text-slate-600 h-8">
               <LogOut className="h-3.5 w-3.5" />Sign Out
             </Button>
           </div>
@@ -138,7 +155,9 @@ export default function SettingsPage() {
               <p className="text-sm font-medium text-red-600">Delete Account</p>
               <p className="text-xs text-slate-400">Permanently delete your account and all data</p>
             </div>
-            <Button variant="outline" size="sm" className="gap-2 text-red-600 border-red-200 hover:bg-red-50 h-8">
+            <Button variant="outline" size="sm"
+              onClick={() => toast.error('Please contact support to delete your account')}
+              className="gap-2 text-red-600 border-red-200 hover:bg-red-50 h-8">
               <Trash2 className="h-3.5 w-3.5" />Delete
             </Button>
           </div>

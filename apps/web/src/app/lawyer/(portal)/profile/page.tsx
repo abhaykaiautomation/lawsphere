@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Button } from '@/components/ui/button';
 import { Camera, Plus, X, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const ALL_AREAS = [
   'Property Law', 'Family Law', 'Corporate Law', 'Criminal Law',
@@ -27,7 +28,6 @@ export default function LawyerProfilePage() {
   const [profile, setProfile]   = useState<ProfileData | null>(null);
   const [loading, setLoading]   = useState(true);
   const [saving,  setSaving]    = useState(false);
-  const [saved,   setSaved]     = useState(false);
   const [error,   setError]     = useState('');
   const [areas,   setAreas]     = useState<string[]>([]);
 
@@ -70,10 +70,11 @@ export default function LawyerProfilePage() {
         body: JSON.stringify({ firstName, lastName, bio, headline, city, consultationFee: Number(fee) }),
       });
       if (!res.ok) throw new Error('Save failed');
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      toast.success('Profile saved successfully');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      const msg = e instanceof Error ? e.message : 'Save failed';
+      setError(msg);
+      toast.error(msg);
     } finally { setSaving(false); }
   }
 
@@ -98,7 +99,6 @@ export default function LawyerProfilePage() {
       </div>
 
       {error && <div className="p-3 rounded-xl bg-red-50 text-red-600 text-sm border border-red-100">{error}</div>}
-      {saved  && <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-sm border border-emerald-100">✓ Profile saved successfully</div>}
 
       {/* Avatar */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">

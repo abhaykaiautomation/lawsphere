@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Scale, CheckCircle2, Loader2, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -66,6 +67,7 @@ export default function LawyerApplyPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? 'Submission failed');
       setSubmitted(true);
+      toast.success('Application submitted successfully!');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Submission failed');
     } finally { setLoading(false); }

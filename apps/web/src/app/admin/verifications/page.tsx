@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { ShieldCheck, Loader2, ExternalLink, RefreshCw, Copy, CheckCircle2, X, Mail } from 'lucide-react';
 
 interface PendingLawyer {
@@ -55,13 +56,16 @@ export default function VerificationsPage() {
       if (!res.ok) throw new Error(data?.error || body.message || 'Approval failed');
 
       setPending(p => p.filter(l => l.id !== lawyer.id));
+      toast.success(verdict === 'VERIFIED'
+        ? `Adv. ${lawyer.firstName} ${lawyer.lastName} approved successfully`
+        : `Application rejected`);
 
       if (verdict === 'VERIFIED' && data.credentials) {
         setCreds({ ...data.credentials, lawyerName: `Adv. ${lawyer.firstName} ${lawyer.lastName}`, emailSent: data.emailSent, resetLink: data.resetLink });
         setApproved(a => [{ id: lawyer.id, name: `Adv. ${lawyer.firstName} ${lawyer.lastName}`, email: lawyer.user.email, approvedAt: new Date().toISOString().split('T')[0] }, ...a]);
       }
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Action failed');
+      toast.error(e instanceof Error ? e.message : 'Action failed');
     } finally { setActionLoading(l => ({ ...l, [lawyer.id]: false })); }
   }
 
