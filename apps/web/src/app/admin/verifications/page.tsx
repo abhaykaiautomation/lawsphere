@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, Loader2, ExternalLink, RefreshCw, Copy, CheckCircle2, X } from 'lucide-react';
+import { ShieldCheck, Loader2, ExternalLink, RefreshCw, Copy, CheckCircle2, X, Mail } from 'lucide-react';
 
 interface PendingLawyer {
   id: string; firstName: string; lastName: string;
@@ -14,7 +14,8 @@ interface PendingLawyer {
 }
 
 interface Credentials {
-  email: string; tempPassword: string; loginUrl: string; lawyerName: string;
+  email: string; loginUrl: string; lawyerName: string; note: string;
+  emailSent?: boolean; resetLink?: string | null;
 }
 
 export default function VerificationsPage() {
@@ -56,7 +57,7 @@ export default function VerificationsPage() {
       setPending(p => p.filter(l => l.id !== lawyer.id));
 
       if (verdict === 'VERIFIED' && data.credentials) {
-        setCreds({ ...data.credentials, lawyerName: `Adv. ${lawyer.firstName} ${lawyer.lastName}` });
+        setCreds({ ...data.credentials, lawyerName: `Adv. ${lawyer.firstName} ${lawyer.lastName}`, emailSent: data.emailSent, resetLink: data.resetLink });
         setApproved(a => [{ id: lawyer.id, name: `Adv. ${lawyer.firstName} ${lawyer.lastName}`, email: lawyer.user.email, approvedAt: new Date().toISOString().split('T')[0] }, ...a]);
       }
     } catch (e: unknown) {
@@ -66,7 +67,10 @@ export default function VerificationsPage() {
 
   function copyCredentials() {
     if (!creds) return;
-    navigator.clipboard.writeText(`Email: ${creds.email}\nPassword: ${creds.tempPassword}\nLogin: ${creds.loginUrl}`);
+    const text = creds.resetLink
+      ? `Email: ${creds.email}\nPassword Setup Link: ${creds.resetLink}\nLogin: ${creds.loginUrl}`
+      : `Email: ${creds.email}\nLogin: ${creds.loginUrl}`;
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -87,24 +91,37 @@ export default function VerificationsPage() {
               </button>
             </div>
 
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 space-y-3 mb-5">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500 font-medium">Email</span>
-                <span className="font-semibold text-slate-900">{creds.email}</span>
+            {creds.emailSent ? (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 mb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  <p className="font-semibold text-emerald-800 text-sm">Email sent successfully!</p>
+                </div>
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  A password setup email has been sent to <strong>{creds.email}</strong>. The lawyer can click the link in the email to set their own password and log in.
+                </p>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500 font-medium">Temp Password</span>
-                <span className="font-mono font-bold text-lg text-emerald-700 bg-emerald-100 px-3 py-1 rounded-lg">{creds.tempPassword}</span>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 mb-5">
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                  ⚠ SMTP not configured — email not sent. Share the reset link below manually.
+                </p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500 font-medium">Email</span>
+                  <span className="font-semibold text-slate-900">{creds.email}</span>
+                </div>
+                {creds.resetLink && (
+                  <div className="text-sm">
+                    <p className="text-slate-500 font-medium mb-1">Password Setup Link</p>
+                    <p className="text-xs text-indigo-600 break-all bg-indigo-50 p-2 rounded-lg">{creds.resetLink}</p>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500 font-medium">Login URL</span>
+                  <span className="text-indigo-600 text-xs">{creds.loginUrl}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500 font-medium">Login URL</span>
-                <span className="text-indigo-600 text-xs">{creds.loginUrl}</span>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700 mb-5">
-              ⚠ Share these credentials with the lawyer. They should change their password after first login.
-            </div>
+            )}
 
             <div className="flex gap-3">
               <Button onClick={copyCredentials} variant="outline" className="flex-1 gap-2">

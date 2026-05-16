@@ -2,13 +2,14 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { adminAuth } from '@/lib/firebase-admin';
 import { getCurrentUser } from '@/lib/auth';
+import { sendLawyerApprovalEmail } from '@/lib/email';
 import { ok, notFound, forbidden, handleError } from '@/lib/errors';
 
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let pwd = '';
   for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
-  return pwd + '@1';  // satisfies most password rules
+  return pwd + '@1';
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -40,19 +41,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // ── APPROVED: create Firebase account ────────────────────────────────────
-    const tempPassword = generateTempPassword();
     let firebaseUid: string;
 
     try {
-      // Check if Firebase user already exists (re-approval case)
       const existing = await adminAuth.getUserByEmail(lawyer.user.email).catch(() => null);
       if (existing) {
+        // Set a temp password so Firebase generates a valid reset link
+        await adminAuth.updateUser(existing.uid, { password: generateTempPassword(), emailVerified: true });
         firebaseUid = existing.uid;
-        await adminAuth.updateUser(existing.uid, { password: tempPassword });
       } else {
         const fbUser = await adminAuth.createUser({
           email: lawyer.user.email,
-          password: tempPassword,
+          password: generateTempPassword(),
           displayName: `${lawyer.firstName} ${lawyer.lastName}`,
           emailVerified: true,
         });
@@ -63,38 +63,61 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return ok({ success: false, error: `Firebase account creation failed: ${msg}` }, 500);
     }
 
-    // If another DB user already owns this firebaseUid (e.g. same person had a
-    // client account via Google), clear it from that user first to avoid P2002.
-    const conflict = await prisma.user.findFirst({
-      where: { firebaseUid, NOT: { id: lawyer.userId } },
-    });
-    if (conflict) {
-      await prisma.user.update({ where: { id: conflict.id }, data: { firebaseUid: null } });
-    }
+    // Clear conflicting firebaseUid from another user (e.g. same person had a client Google account)
+    const conflict = await prisma.user.findFirst({ where: { firebaseUid, NOT: { id: lawyer.userId } } });
+    if (conflict) await prisma.user.update({ where: { id: conflict.id }, data: { firebaseUid: null } });
 
-    await prisma.lawyerProfile.update({ where: { id }, data: { verificationStatus: 'VERIFIED', availabilityStatus: 'AVAILABLE', isProfileComplete: true } });
+    // Update DB
+    await prisma.lawyerProfile.update({
+      where: { id },
+      data: { verificationStatus: 'VERIFIED', availabilityStatus: 'AVAILABLE', isProfileComplete: true },
+    });
     await prisma.user.update({
       where: { id: lawyer.userId },
       data: { status: 'ACTIVE', firebaseUid, emailVerified: true },
     });
 
+    // Generate Firebase password reset link (lawyer sets their own password)
+    const loginUrl   = `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/login`;
+    const resetLink  = await adminAuth.generatePasswordResetLink(lawyer.user.email, { url: loginUrl })
+                         .catch(() => null);
+
+    // Send approval email with reset link
+    const lawyerName = `Adv. ${lawyer.firstName} ${lawyer.lastName}`;
+    let emailSent = false;
+    if (resetLink) {
+      const result = await sendLawyerApprovalEmail({
+        to:         lawyer.user.email,
+        lawyerName,
+        resetLink,
+        loginUrl,
+      }).catch(() => ({ sent: false }));
+      emailSent = result.sent;
+    }
+
+    // In-app notification
     await prisma.notification.create({
       data: {
         userId: lawyer.userId,
         type: 'LAWYER_VERIFIED',
         title: 'Profile Verified! You can now receive clients.',
-        body: 'Your LawSphere lawyer account has been verified. Login credentials have been shared with you.',
+        body: emailSent
+          ? 'Your account has been verified. Check your email for a link to set up your password.'
+          : 'Your account has been verified. Contact admin for login credentials.',
       },
     });
 
     return ok({
       success: true,
-      status: 'VERIFIED',
+      status:  'VERIFIED',
+      emailSent,
+      resetLink: resetLink ?? null,
       credentials: {
-        email: lawyer.user.email,
-        tempPassword,
-        loginUrl: `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/login`,
-        note: 'Share these credentials with the lawyer. They should change their password after first login.',
+        email:    lawyer.user.email,
+        loginUrl,
+        note: emailSent
+          ? `Approval email sent to ${lawyer.user.email} with a password setup link.`
+          : `SMTP not configured. Reset link: ${resetLink ?? 'unavailable'}`,
       },
     });
   } catch (e) {
