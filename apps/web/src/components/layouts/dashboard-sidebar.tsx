@@ -59,7 +59,8 @@ const portals = {
 };
 
 function getPortal(pathname: string) {
-  if (pathname.startsWith('/lawyer')) return portals.lawyer;
+  // /lawyer/* = lawyer portal   /lawyers/* = public directory (client portal)
+  if (pathname === '/lawyer' || pathname.startsWith('/lawyer/')) return portals.lawyer;
   if (pathname.startsWith('/admin'))  return portals.admin;
   return portals.client;
 }
