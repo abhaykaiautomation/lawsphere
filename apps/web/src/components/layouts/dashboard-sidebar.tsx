@@ -58,10 +58,21 @@ const portals = {
   },
 };
 
-function getPortal(pathname: string) {
+// Shared paths not tied to a specific portal — use role to pick the right one
+const SHARED_PATHS = ['/settings', '/notifications'];
+
+function getPortal(pathname: string, role?: string) {
   // /lawyer/* = lawyer portal   /lawyers/* = public directory (client portal)
   if (pathname === '/lawyer' || pathname.startsWith('/lawyer/')) return portals.lawyer;
   if (pathname.startsWith('/admin'))  return portals.admin;
+
+  // For shared pages (/settings, /notifications) use the logged-in user's role
+  const isShared = SHARED_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
+  if (isShared) {
+    if (role === 'ADMIN')  return portals.admin;
+    if (role === 'LAWYER') return portals.lawyer;
+  }
+
   return portals.client;
 }
 
@@ -71,7 +82,7 @@ export function DashboardSidebar() {
   const pathname = usePathname();
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
-  const portal = getPortal(pathname);
+  const portal = getPortal(pathname, user?.role);
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? 'U';
 
   function handleLogout() {
