@@ -224,8 +224,17 @@ export default async function LawyerProfilePage({ params }: { params: Promise<{ 
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sticky top-6">
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <p className="text-3xl font-bold text-slate-900">₹{fee.toLocaleString('en-IN')}</p>
-                  <p className="text-sm text-slate-400">per session (30 min)</p>
+                  {fee > 0 ? (
+                    <>
+                      <p className="text-3xl font-bold text-slate-900">₹{fee.toLocaleString('en-IN')}</p>
+                      <p className="text-sm text-slate-400">per session (30 min)</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-semibold text-slate-500">Fee not set</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Contact lawyer to enquire</p>
+                    </>
+                  )}
                 </div>
                 <div className="text-right">
                   <div className="flex items-center gap-1 justify-end">
@@ -247,30 +256,33 @@ export default async function LawyerProfilePage({ params }: { params: Promise<{ 
                 ))}
               </div>
 
-              {/* Fee breakdown */}
-              <div className="bg-slate-50 rounded-xl p-4 mb-5 space-y-2 text-sm">
-                <div className="flex justify-between text-slate-600">
-                  <span>Consultation fee</span>
-                  <span>₹{fee.toLocaleString('en-IN')}</span>
+              {/* Fee breakdown — only if fee is set */}
+              {fee > 0 && (
+                <div className="bg-slate-50 rounded-xl p-4 mb-5 space-y-2 text-sm">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Consultation fee</span>
+                    <span>₹{fee.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 text-xs">
+                    <span>Platform fee (10%)</span>
+                    <span>₹{platform.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-slate-900 border-t border-slate-200 pt-2">
+                    <span>Total</span>
+                    <span>₹{total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-slate-400 text-xs">
-                  <span>Platform fee (10%)</span>
-                  <span>₹{platform.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                </div>
-                <div className="flex justify-between font-semibold text-slate-900 border-t border-slate-200 pt-2">
-                  <span>Total</span>
-                  <span>₹{total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                </div>
-              </div>
+              )}
 
               <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 font-semibold gap-2">
                 <Link href={`/client/book/${lawyer.slug}`}>
-                  <Calendar className="h-4 w-4" />Book Consultation
+                  <Calendar className="h-4 w-4" />
+                  {fee > 0 ? 'Book Consultation' : 'Request Consultation'}
                 </Link>
               </Button>
 
               <p className="text-xs text-slate-400 text-center mt-3 leading-relaxed">
-                Payment is collected after the lawyer confirms your appointment
+                {fee > 0 ? 'Payment is collected after the lawyer confirms your appointment' : 'The lawyer will discuss their fee when they confirm your request'}
               </p>
             </div>
 

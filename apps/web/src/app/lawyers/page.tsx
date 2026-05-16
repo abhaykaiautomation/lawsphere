@@ -81,14 +81,26 @@ export default async function LawyersPage() {
                   </div>
 
                   <div className="flex items-center justify-between text-sm mb-5">
-                    <div className="flex items-center gap-1.5">
-                      <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                      <span className="font-semibold text-slate-900">{Number(l.averageRating).toFixed(1)}</span>
-                      <span className="text-slate-400 text-xs">({l.totalReviews} reviews)</span>
-                    </div>
+                    {/* Rating — only show if the lawyer has reviews */}
+                    {Number(l.totalReviews) > 0 ? (
+                      <div className="flex items-center gap-1.5">
+                        <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                        <span className="font-semibold text-slate-900">{Number(l.averageRating).toFixed(1)}</span>
+                        <span className="text-slate-400 text-xs">({l.totalReviews} reviews)</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">New lawyer</span>
+                    )}
+                    {/* Fee — show "Contact" if not yet set */}
                     <div className="text-right">
-                      <p className="font-bold text-slate-900">₹{Number(l.consultationFee).toLocaleString('en-IN')}</p>
-                      <p className="text-xs text-slate-400">per session</p>
+                      {Number(l.consultationFee) > 0 ? (
+                        <>
+                          <p className="font-bold text-slate-900">₹{Number(l.consultationFee).toLocaleString('en-IN')}</p>
+                          <p className="text-xs text-slate-400">per session</p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">Fee not set</p>
+                      )}
                     </div>
                   </div>
 
