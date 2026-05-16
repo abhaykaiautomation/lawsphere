@@ -57,25 +57,35 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   }
 
-  // ── Email/password (Client: custom API | Lawyer: Firebase email/password) ──
+  // ── Email / password — smart fallback ────────────────────────────────────
+  // 1. Try custom bcrypt API (clients)
+  // 2. If API returns a non-client error (lawyer/admin account), auto-retry via Firebase
+  // This means the tab selection is guidance only — the form handles both paths.
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError('');
     try {
+      // Step 1: try custom client auth
       if (role === 'client') {
-        // Custom bcrypt auth — clients only
         const res  = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
         });
         const body = await res.json();
-        if (!res.ok) throw new Error(body.message ?? 'Invalid credentials');
-        setAuth(body.data.user, body.data.token);
-        redirect(body.data.user);
 
-      } else if (role === 'lawyer' || role === 'admin') {
-        // Firebase email/password — lawyer credentials from admin, admin credentials from setup script
+        // If the account is a lawyer/admin, fall through to Firebase auth
+        if (res.status !== 403 || !body.message?.toLowerCase().includes('lawyer') && !body.message?.toLowerCase().includes('admin')) {
+          if (!res.ok) throw new Error(body.message ?? 'Invalid credentials');
+          setAuth(body.data.user, body.data.token);
+          redirect(body.data.user);
+          return;
+        }
+        // Fall through to Firebase for lawyer/admin accounts
+      }
+
+      // Step 2: Firebase email/password (lawyers, admins, or fallback from client tab)
+      {
         const cred    = await signInWithEmailAndPassword(auth, email, password);
         const idToken = await cred.user.getIdToken();
         const res     = await fetch('/api/auth/firebase-sync', {
@@ -86,7 +96,6 @@ export default function LoginPage() {
         const body = await res.json();
         if (!res.ok) throw new Error(body.message ?? 'Sign-in failed');
 
-        // Account not found in DB (e.g. application not yet submitted)
         if (body.data?.needsRegistration) {
           throw new Error('No account found. Please submit your application first.');
         }
@@ -94,8 +103,8 @@ export default function LoginPage() {
         const userData = body.data?.user;
         if (!userData) throw new Error('Sign-in failed. Please try again.');
 
-        const expectedRole = role.toUpperCase();
-        if (userData.role !== expectedRole) {
+        const expectedRole = role === 'client' ? null : role.toUpperCase();
+        if (expectedRole && userData.role !== expectedRole) {
           throw new Error(`This account is registered as a ${userData.role.toLowerCase()}, not a ${role}.`);
         }
         setAuth(userData, body.data.token);
