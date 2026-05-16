@@ -63,6 +63,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return ok({ success: false, error: `Firebase account creation failed: ${msg}` }, 500);
     }
 
+    // If another DB user already owns this firebaseUid (e.g. same person had a
+    // client account via Google), clear it from that user first to avoid P2002.
+    const conflict = await prisma.user.findFirst({
+      where: { firebaseUid, NOT: { id: lawyer.userId } },
+    });
+    if (conflict) {
+      await prisma.user.update({ where: { id: conflict.id }, data: { firebaseUid: null } });
+    }
+
     await prisma.lawyerProfile.update({ where: { id }, data: { verificationStatus: 'VERIFIED', availabilityStatus: 'AVAILABLE', isProfileComplete: true } });
     await prisma.user.update({
       where: { id: lawyer.userId },

@@ -49,8 +49,9 @@ export default function VerificationsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: verdict }),
       });
-      const { data } = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? 'Failed');
+      const body = await res.json();
+      const data = body.data;
+      if (!res.ok) throw new Error(data?.error || body.message || 'Approval failed');
 
       setPending(p => p.filter(l => l.id !== lawyer.id));
 

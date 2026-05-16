@@ -17,6 +17,16 @@ export async function POST(req: NextRequest) {
       practiceAreaSlugs: string[]; bio?: string; headline?: string;
     };
 
+    // If user typed full name in firstName and left lastName blank/same,
+    // auto-split so "Abhay Kumar" → firstName="Abhay" lastName="Kumar"
+    let fn = firstName.trim();
+    let ln = lastName.trim();
+    if (!ln || ln === fn) {
+      const parts = fn.split(' ');
+      fn = parts[0];
+      ln = parts.slice(1).join(' ') || '';
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return conflict('An account with this email already exists');
 
@@ -36,7 +46,7 @@ export async function POST(req: NextRequest) {
       const profile = await tx.lawyerProfile.create({
         data: {
           userId: newUser.id,
-          firstName, lastName, slug, bio, headline,
+          firstName: fn, lastName: ln, slug, bio, headline,
           barCouncilNumber, barCouncilState,
           yearsOfExperience: Number(yearsOfExperience),
           city, state,
