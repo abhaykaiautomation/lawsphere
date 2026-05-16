@@ -8,7 +8,11 @@ export async function GET(req: NextRequest) {
     const { sub } = getCurrentUser(req);
     const lawyer = await prisma.lawyerProfile.findUnique({
       where: { userId: sub, deletedAt: null },
-      include: { practiceAreas: { include: { practiceArea: true } }, educations: true, experiences: true, availability: true },
+      include: {
+        user: { select: { email: true, phone: true } },
+        practiceAreas: { include: { practiceArea: true } },
+        educations: true, experiences: true, availability: true,
+      },
     });
     if (!lawyer) return notFound('Lawyer profile not found');
     return ok(lawyer);
