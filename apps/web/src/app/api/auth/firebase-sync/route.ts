@@ -26,15 +26,18 @@ export async function POST(req: NextRequest) {
     // ── 1. Try find by Firebase UID (returning user) ─────────────────────────
     let user = await prisma.user.findUnique({ where: { firebaseUid: uid } });
 
-    // ── 2. Try find by email (existing seeded / imported account — link UID) ──
+    // ── 2. Try find by email — case-insensitive (Firebase normalises to lowercase) ──
     if (!user) {
-      const byEmail = await prisma.user.findUnique({ where: { email } });
+      const byEmail = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
+      });
       if (byEmail) {
         user = await prisma.user.update({
-          where: { email },
+          where: { id: byEmail.id },
           data: {
             firebaseUid: uid,
             emailVerified: true,
+            email: email.toLowerCase(), // normalise to lowercase going forward
             ...(isAdmin && { role: UserRole.ADMIN, status: UserStatus.ACTIVE }),
           },
         });

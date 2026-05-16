@@ -86,12 +86,20 @@ export default function LoginPage() {
         const body = await res.json();
         if (!res.ok) throw new Error(body.message ?? 'Sign-in failed');
 
-        const expectedRole = role.toUpperCase();
-        if (body.data.user.role !== expectedRole) {
-          throw new Error(`This account is not registered as a ${role}. Please select the correct role.`);
+        // Account not found in DB (e.g. application not yet submitted)
+        if (body.data?.needsRegistration) {
+          throw new Error('No account found. Please submit your application first.');
         }
-        setAuth(body.data.user, body.data.token);
-        redirect(body.data.user);
+
+        const userData = body.data?.user;
+        if (!userData) throw new Error('Sign-in failed. Please try again.');
+
+        const expectedRole = role.toUpperCase();
+        if (userData.role !== expectedRole) {
+          throw new Error(`This account is registered as a ${userData.role.toLowerCase()}, not a ${role}.`);
+        }
+        setAuth(userData, body.data.token);
+        redirect(userData);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Sign-in failed';
