@@ -62,7 +62,7 @@ export default function LawyerProfilePage() {
   }
 
   async function handleSave() {
-    setSaving(true); setError(''); setSaved(false);
+    setSaving(true); setError('');
     try {
       const res = await fetch('/api/lawyers/me/profile', {
         method: 'PATCH',
