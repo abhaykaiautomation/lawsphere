@@ -21,14 +21,17 @@ export default async function LawyerDashboardPage() {
   });
   if (!lawyerProfile) redirect('/lawyer/pending');
 
-  const [appointments, totalConsultations, recentEarnings] = await Promise.all([
+  const [appointments, totalAppointments, completedConsultations, recentEarnings] = await Promise.all([
     prisma.appointment.findMany({
       where: { lawyerProfileId: lawyerProfile.id, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: new Date() } },
       orderBy: { scheduledAt: 'asc' },
       take: 5,
       include: { clientProfile: { select: { firstName: true, lastName: true } } },
     }),
-    prisma.appointment.count({ where: { lawyerProfileId: lawyerProfile.id, status: 'CONFIRMED' } }),
+    // All appointments ever (not just upcoming)
+    prisma.appointment.count({ where: { lawyerProfileId: lawyerProfile.id } }),
+    // Completed consultations
+    prisma.appointment.count({ where: { lawyerProfileId: lawyerProfile.id, status: 'COMPLETED' } }),
     prisma.payment.aggregate({
       where: { lawyerProfileId: lawyerProfile.id, status: 'COMPLETED' },
       _sum: { lawyerPayout: true },
@@ -36,12 +39,13 @@ export default async function LawyerDashboardPage() {
   ]);
 
   const totalEarnings = Number(recentEarnings._sum.lawyerPayout ?? 0);
+  const pendingCount  = appointments.filter(a => a.status === 'PENDING').length;
 
   const stats = [
-    { label: 'Pending Appointments', value: appointments.filter(a => a.status === 'PENDING').length, icon: Clock, color: 'bg-yellow-50 text-yellow-600' },
-    { label: 'Total Consultations', value: totalConsultations, icon: Users, color: 'bg-indigo-50 text-indigo-600' },
-    { label: 'Total Earnings', value: `₹${totalEarnings.toLocaleString('en-IN')}`, icon: DollarSign, color: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Avg. Rating', value: Number(lawyerProfile.averageRating).toFixed(1), icon: Star, color: 'bg-amber-50 text-amber-600' },
+    { label: 'Upcoming Appointments', value: appointments.length,    icon: Calendar,  color: 'bg-indigo-50 text-indigo-600' },
+    { label: 'Pending Confirmation',  value: pendingCount,            icon: Clock,     color: 'bg-yellow-50 text-yellow-600' },
+    { label: 'Completed Sessions',    value: completedConsultations,  icon: Users,     color: 'bg-emerald-50 text-emerald-600' },
+    { label: 'Avg. Rating',           value: Number(lawyerProfile.averageRating) > 0 ? Number(lawyerProfile.averageRating).toFixed(1) : '—', icon: Star, color: 'bg-amber-50 text-amber-600' },
   ];
 
   const statusColor: Record<string, string> = {
